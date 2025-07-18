@@ -1,0 +1,56 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-gpu-deployment
+  namespace: llm-deployment
+  labels:
+    app: llm-api-gpu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-api-gpu
+  template:
+    metadata:
+      labels:
+        app: llm-api-gpu
+    spec:
+      containers:
+      - name: llm-api
+        image: your-account.dkr.ecr.us-west-2.amazonaws.com/llm-api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MODEL_NAME
+          value: "microsoft/DialoGPT-large"
+        - name: MAX_LENGTH
+          value: "1024"
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            memory: "8Gi"
+            cpu: "2000m"
+          limits:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
+            cpu: "4000m"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 30
+      nodeSelector:
+        accelerator: nvidia-tesla-k80
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+        
