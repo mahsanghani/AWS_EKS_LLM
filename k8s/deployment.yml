@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-deployment
+  namespace: llm-deployment
+  labels:
+    app: llm-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: llm-api
+  template:
+    metadata:
+      labels:
+        app: llm-api
+    spec:
+      containers:
+      - name: llm-api
+        image: your-account.dkr.ecr.us-west-2.amazonaws.com/llm-api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MODEL_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: llm-config
+              key: MODEL_NAME
+        - name: MAX_LENGTH
+          valueFrom:
+            configMapKeyRef:
+              name: llm-config
+              key: MAX_LENGTH
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        volumeMounts:
+        - name: model-cache
+          mountPath: /root/.cache/huggingface
+      volumes:
+      - name: model-cache
+        emptyDir: {}
+      nodeSelector:
+        node-type: gpu  # If using GPU nodes
+      tolerations:
+      - key: "gpu"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
