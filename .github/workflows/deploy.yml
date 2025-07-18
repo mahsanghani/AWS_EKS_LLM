@@ -31,4 +31,32 @@ jobs:
 
     - name: Build and push Docker image
       env:
-        ECR_REGISTRY:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        cd app
+        docker build -t $ECR_REGISTRY/llm-api:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/llm-api:$IMAGE_TAG $ECR_REGISTRY/llm-api:latest
+        docker push $ECR_REGISTRY/llm-api:$IMAGE_TAG
+        docker push $ECR_REGISTRY/llm-api:latest
+
+    - name: Update kube config
+      run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+    - name: Deploy to EKS
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Update image in deployment
+        sed -i "s|your-account.dkr.ecr.us-west-2.amazonaws.com/llm-api:latest|$ECR_REGISTRY/llm-api:$IMAGE_TAG|g" k8s/deployment.yaml
+        
+        # Apply manifests
+        kubectl apply -f k8s/
+        
+        # Wait for rollout
+        kubectl rollout status deployment/llm-deployment -n llm-deployment --timeout=300s
+        
+        # Get service info
+        kubectl get services -n llm-deployment
+        kubectl get ingress -n llm-deployment
